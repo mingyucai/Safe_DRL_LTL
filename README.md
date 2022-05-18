@@ -1,6 +1,6 @@
 # Under Construction
 
-## Publications
+## Publication
 <pre>
 @article{cai2021safety,
   title={Safety-Critical Learning of Robot Control with Temporal Logic Specifications},
