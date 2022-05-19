@@ -98,8 +98,6 @@ def ECBF_control(x, action, f, g):
     torque_bound = 15
     max_speed = 60
 
-    ##### build discrete-time QP
-
     gamma_b = 0.5
     G = np.array(
         [[-np.dot(H1, g), -np.dot(H4, g), 1, -1, g[1], -g[1]],
@@ -114,7 +112,6 @@ def ECBF_control(x, action, f, g):
                   f[1] + g[1]*action + max_speed])
     h = np.squeeze(h).astype(np.double)
 
-    ### solve the controller
     G = matrix(G,tc='d')
     h = matrix(h,tc='d')
 
@@ -127,6 +124,57 @@ def ECBF_control(x, action, f, g):
         print("Error in QP")
     elif (np.add(np.squeeze(action), np.squeeze(u_bar[0])) + 0.001 <= -torque_bound):
         u_bar[0] = -torque_bound - action
+        print("Error in QP")
+    else:
+        pass
+
+    return np.expand_dims(np.array(u_bar[0]), 0), np.expand_dims(np.array(u_bar[1]), 0)
+
+def GP_ECBF_control(u_rl, f, g, x, std):
+
+    N = len(u_rl)
+    P = matrix(np.diag([1., 1e24]), tc='d')
+    q = matrix(np.zeros(N+1))
+    H1 = np.array([1, 0.05])
+    H2 = np.array([1, -0.05])
+    H3 = np.array([-1, 0.05])
+    H4 = np.array([-1, -0.05])
+    F = math.pi/2 #1
+    torque_bound = 15
+    max_speed = 60
+
+    gamma_b = 0.5
+
+    kd = 1.5
+    u_a = 0
+
+    G = np.array(
+        [[-np.dot(H1, g), -np.dot(H2, g), -np.dot(H3, g), -np.dot(H4, g), 1, -1, g[1], -g[1]],
+         [-1, -1, -1, -1, 0, 0, 0, 0]])
+    G = np.transpose(G)
+
+    h = np.array([gamma_b * F + np.dot(H1, f) + np.dot(H1, g) * u_a - (1 - gamma_b) * np.dot(H1, x) - kd * np.dot(np.abs(H1), std),
+                  gamma_b * F + np.dot(H2, f) + np.dot(H2, g) * u_a - (1 - gamma_b) * np.dot(H2, x) - kd * np.dot(np.abs(H2), std),
+                  gamma_b * F + np.dot(H3, f) + np.dot(H3, g) * u_a - (1 - gamma_b) * np.dot(H3, x) - kd * np.dot( np.abs(H3), std),
+                  gamma_b * F + np.dot(H4, f) + np.dot(H4, g) * u_a - (1 - gamma_b) * np.dot(H4, x) - kd * np.dot(np.abs(H4), std),
+                  -u_rl + torque_bound,
+                  u_rl + torque_bound,
+                  -f[1] - g[1] * u_rl + max_speed,
+                  f[1] + g[1] * u_rl + max_speed])
+    h = np.squeeze(h).astype(np.double)
+
+    G = matrix(G, tc='d')
+    h = matrix(h, tc='d')
+
+    solvers.options['show_progress'] = False
+    sol = solvers.qp(P, q, G, h)
+    u_bar = sol['x']
+
+    if (np.add(np.squeeze(u_rl), np.squeeze(u_bar[0])) - 0.001 >= torque_bound):
+        u_bar[0] = torque_bound - u_rl
+        print("Error in QP")
+    elif (np.add(np.squeeze(u_rl), np.squeeze(u_bar[0])) + 0.001 <= -torque_bound):
+        u_bar[0] = - torque_bound - u_rl
         print("Error in QP")
     else:
         pass
